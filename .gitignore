@@ -15,5 +15,6 @@ build/
 *.ogg
 *.wav
 temp_audio/
+usage_data.json
 .DS_Store
 Thumbs.db
