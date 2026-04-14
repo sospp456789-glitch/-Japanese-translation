@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>胖虎的即時翻譯</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'Helvetica Neue', 'Noto Sans TC', 'Noto Sans JP', sans-serif;
+    background: #0f0f1a;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Header */
+  .header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+  }
+  .header .logo { font-size: 22px; }
+  .header .title { font-size: 17px; font-weight: 700; flex: 1; }
+  .header .badge {
+    font-size: 10px;
+    background: #E8344E;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-weight: 600;
+    animation: pulse-badge 1.5s infinite;
+    display: none;
+  }
+  .badge.active { display: inline-block; }
+  @keyframes pulse-badge { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* Chat area */
+  .chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+  }
+
+  /* Message bubbles - LINE style */
+  .msg-row { display: flex; gap: 8px; animation: fadeIn 0.3s ease; }
+  .msg-row.right { justify-content: flex-end; }
+  .msg-row.left { justify-content: flex-start; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .bubble {
+    max-width: 80%;
+    border-radius: 18px;
+    padding: 12px 16px;
+    position: relative;
+  }
+
+  /* 右邊 = 你 (中文 → 日文翻譯) */
+  .msg-row.right .bubble {
+    background: #06C755;
+    border-bottom-right-radius: 4px;
+  }
+  .msg-row.right .original {
+    font-size: 14px;
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+  }
+  .msg-row.right .translated {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.4;
+  }
+
+  /* 左邊 = 對方 (日文 → 中文翻譯) */
+  .msg-row.left .bubble {
+    background: #2a2a3e;
+    border-bottom-left-radius: 4px;
+  }
+  .msg-row.left .original {
+    font-size: 14px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .msg-row.left .translated {
+    font-size: 22px;
+    font-weight: 700;
+    color: #E8344E;
+    line-height: 1.4;
+  }
+
+  /* 正在聽... 泡泡 */
+  .listening-bubble {
+    max-width: 80%;
+    border-radius: 18px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.08);
+    border: 1px dashed rgba(255,255,255,0.2);
+    display: none;
+  }
+  .listening-bubble.active { display: block; }
+  .listening-bubble .interim {
+    font-size: 18px;
+    color: #aaa;
+    min-height: 24px;
+  }
+  .listening-bubble .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 20px;
+    background: #06C755;
+    animation: blink 0.7s infinite;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+  }
+  @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+
+  /* Mic bar */
+  .mic-bar {
+    padding: 16px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: rgba(15,15,26,0.95);
+  }
+  .mic-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #06C755, #04a648);
+    cursor: pointer;
+    font-size: 28px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mic-btn:active { transform: scale(0.95); }
+  .mic-btn.listening {
+    background: linear-gradient(135deg, #E8344E, #c42a40);
+    box-shadow: 0 0 0 8px rgba(232,52,78,0.2), 0 0 0 16px rgba(232,52,78,0.1);
+    animation: mic-pulse 1.5s infinite;
+  }
+  @keyframes mic-pulse {
+    0%,100% { box-shadow: 0 0 0 8px rgba(232,52,78,0.2), 0 0 0 16px rgba(232,52,78,0.1); }
+    50% { box-shadow: 0 0 0 12px rgba(232,52,78,0.15), 0 0 0 24px rgba(232,52,78,0.05); }
+  }
+  .mic-label {
+    font-size: 13px;
+    color: #888;
+    text-align: center;
+  }
+  .mic-label.active { color: #E8344E; }
+
+  /* Hint */
+  .hint {
+    text-align: center;
+    padding: 40px 20px;
+    color: #555;
+    font-size: 14px;
+    line-height: 2;
+  }
+  .hint .icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* Not supported */
+  .not-supported {
+    text-align: center;
+    padding: 40px 20px;
+    color: #E8344E;
+    font-size: 16px;
+    line-height: 1.8;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="logo">🎌</span>
+  <span class="title">胖虎的即時翻譯</span>
+  <span class="badge" id="liveBadge">LIVE</span>
+</div>
+
+<div class="chat" id="chat">
+  <div class="hint" id="hint">
+    <div class="icon">🎤</div>
+    按下麥克風開始對話<br>
+    說中文或日文都可以，自動偵測翻譯<br><br>
+    🟢 你說的 → 右邊（翻日文）<br>
+    🔴 對方說的 → 左邊（翻中文）
+  </div>
+  <div class="not-supported" id="notSupported">
+    ⚠️ 你的瀏覽器不支援語音辨識<br><br>
+    請用 <b>Chrome</b> 瀏覽器開啟此頁面
+  </div>
+</div>
+
+<!-- 正在聽的暫時泡泡 -->
+<div style="padding: 0 16px 8px; display: none;" id="interimRow">
+  <div class="listening-bubble active">
+    <div class="interim" id="interimText"><span class="cursor"></span></div>
+  </div>
+</div>
+
+<div class="mic-bar">
+  <button class="mic-btn" id="micBtn">🎤</button>
+  <div class="mic-label" id="micLabel">按下開始對話</div>
+</div>
+
+<script>
+const chatEl = document.getElementById('chat');
+const micBtn = document.getElementById('micBtn');
+const micLabel = document.getElementById('micLabel');
+const liveBadge = document.getElementById('liveBadge');
+const hint = document.getElementById('hint');
+const interimRow = document.getElementById('interimRow');
+const interimText = document.getElementById('interimText');
+const notSupported = document.getElementById('notSupported');
+
+let isListening = false;
+let recognition = null;
+
+// 檢查瀏覽器支援
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognition) {
+  hint.style.display = 'none';
+  notSupported.style.display = 'block';
+  micBtn.disabled = true;
+  micBtn.style.opacity = 0.3;
+}
+
+// 偵測語言（有假名 = 日文）
+function detectLang(text) {
+  return /[\u3040-\u309F\u30A0-\u30FF]/.test(text) ? 'ja' : 'zh-TW';
+}
+
+// 呼叫翻譯 API
+async function translateText(text) {
+  try {
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    return await res.json();
+  } catch (e) {
+    console.error('Translation error:', e);
+    return null;
+  }
+}
+
+// 新增對話泡泡
+function addBubble(original, translated, lang) {
+  hint.style.display = 'none';
+
+  const isMyMessage = lang === 'zh-TW'; // 我說中文 → 右邊
+  const row = document.createElement('div');
+  row.className = `msg-row ${isMyMessage ? 'right' : 'left'}`;
+
+  row.innerHTML = `
+    <div class="bubble">
+      <div class="original">${original}</div>
+      <div class="translated">${translated}</div>
+    </div>
+  `;
+
+  chatEl.appendChild(row);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// 開始 / 停止聽
+function toggleListening() {
+  if (isListening) {
+    stopListening();
+  } else {
+    startListening();
+  }
+}
+
+function startListening() {
+  if (!SpeechRecognition) return;
+
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  // 同時聽中文和日文
+  recognition.lang = 'ja-JP'; // 日文模式也能辨識中文
+
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.classList.add('listening');
+    micBtn.textContent = '⏹';
+    micLabel.textContent = '正在聆聽... 說中文或日文';
+    micLabel.classList.add('active');
+    liveBadge.classList.add('active');
+    interimRow.style.display = 'block';
+  };
+
+  recognition.onresult = async (event) => {
+    let interim = '';
+    let final = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        final += transcript;
+      } else {
+        interim += transcript;
+      }
+    }
+
+    // 顯示即時辨識文字
+    if (interim) {
+      interimText.innerHTML = interim + '<span class="cursor"></span>';
+      interimRow.style.display = 'block';
+    }
+
+    // 一句話講完了，送去翻譯
+    if (final) {
+      interimText.innerHTML = '<span class="cursor"></span>';
+
+      const lang = detectLang(final);
+      const result = await translateText(final);
+
+      if (result && result.translated) {
+        addBubble(final, result.translated, lang);
+      } else {
+        addBubble(final, '(翻譯失敗，請再說一次)', lang);
+      }
+    }
+  };
+
+  recognition.onerror = (event) => {
+    console.error('Speech error:', event.error);
+    if (event.error === 'not-allowed') {
+      micLabel.textContent = '請允許麥克風權限';
+    }
+  };
+
+  recognition.onend = () => {
+    // 如果還在聽的狀態，自動重新啟動（持續聆聽）
+    if (isListening) {
+      try {
+        recognition.start();
+      } catch (e) {
+        stopListening();
+      }
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (e) {
+    console.error('Start error:', e);
+  }
+}
+
+function stopListening() {
+  isListening = false;
+  if (recognition) {
+    recognition.abort();
+    recognition = null;
+  }
+  micBtn.classList.remove('listening');
+  micBtn.textContent = '🎤';
+  micLabel.textContent = '按下開始對話';
+  micLabel.classList.remove('active');
+  liveBadge.classList.remove('active');
+  interimRow.style.display = 'none';
+  interimText.innerHTML = '<span class="cursor"></span>';
+}
+
+micBtn.addEventListener('click', toggleListening);
+</script>
+
+</body>
+</html>

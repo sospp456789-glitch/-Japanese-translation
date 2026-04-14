@@ -3,7 +3,7 @@ import json
 import threading
 import time
 import traceback
-from flask import Flask, request, abort, send_file
+from flask import Flask, request, abort, send_file, render_template, jsonify
 
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
@@ -164,6 +164,34 @@ def build_flex_card(original, translated, source_lang, target_lang):
 @app.route("/", methods=["GET"])
 def health():
     return "AI 語音翻譯 Bot 運作中 🎌"
+
+
+# ── 即時翻譯網頁 ─────────────────────────────────────────────
+@app.route("/live", methods=["GET"])
+def live_translate():
+    return render_template("realtime.html")
+
+
+@app.route("/api/translate", methods=["POST"])
+def api_translate():
+    """即時翻譯 API — 供網頁版使用。"""
+    try:
+        data = request.get_json()
+        text = data.get("text", "").strip()
+        if not text:
+            return jsonify({"error": "empty text"}), 400
+
+        result = translate(text)
+        record("translate")
+        return jsonify({
+            "original": result["original"],
+            "translated": result["translated"],
+            "source_lang": result["source_lang"],
+            "target_lang": result["target_lang"],
+        })
+    except Exception as e:
+        print(f"API translate error: {traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
 
 
 # ── LINE Webhook ──────────────────────────────────────────────
