@@ -214,6 +214,17 @@ def api_voice_translate():
         if not recognized_text:
             return jsonify({"error": "empty recognition"})
 
+        # 過濾 Whisper 幻覺（靜音時常見的誤判）
+        HALLUCINATIONS = {
+            "thank you", "thanks for watching", "thank you for watching",
+            "thanks", "bye", "goodbye", "see you", "see you next time",
+            "you", "the end", "so", "okay", "ok",
+            "ご視聴ありがとうございました", "ありがとうございました",
+            "おやすみなさい", "では、また",
+        }
+        if recognized_text.lower().strip('.!?。！？ ') in HALLUCINATIONS:
+            return jsonify({"error": "filtered hallucination"})
+
         # 用文字內容判斷語言
         text_lang = detect_language(recognized_text)
         if text_lang == "ja":

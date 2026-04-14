@@ -254,8 +254,11 @@ let volumeInterval = null;
 let stream = null;
 
 // 偵測靜音的參數
-const SILENCE_THRESHOLD = 15;   // 音量低於此值 = 靜音
-const SILENCE_DURATION = 1500;  // 靜音超過 1.5 秒就送出
+const SILENCE_THRESHOLD = 25;   // 音量低於此值 = 靜音（調高避免背景噪音觸發）
+const SILENCE_DURATION = 1800;  // 靜音超過 1.8 秒就送出
+const MIN_VOICE_DURATION = 800; // 至少要有 0.8 秒有聲音才送出
+let voiceStartTime = 0;         // 開始有聲音的時間
+let hasVoice = false;           // 這段錄音是否有偵測到聲音
 
 // 呼叫語音辨識 + 翻譯 API
 async function recognizeAndTranslate(audioBlob) {
@@ -352,10 +355,11 @@ function startNewRecording() {
   };
 
   mediaRecorder.onstop = () => {
-    if (audioChunks.length > 0) {
+    if (audioChunks.length > 0 && hasVoice) {
+      const voiceDuration = Date.now() - voiceStartTime;
       const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-      // 只有超過 0.5 秒的音檔才送出（避免雜音）
-      if (blob.size > 5000) {
+      // 要有足夠的聲音才送出
+      if (blob.size > 10000 && voiceDuration > MIN_VOICE_DURATION) {
         recognizeAndTranslate(blob);
       }
     }
@@ -366,6 +370,8 @@ function startNewRecording() {
   };
 
   mediaRecorder.start();
+  hasVoice = false;
+  voiceStartTime = 0;
   resetSilenceTimer();
 }
 
@@ -394,8 +400,12 @@ function startVolumeMonitor() {
     const pct = Math.min(avg / 60 * 100, 100);
     volumeFill.style.width = pct + '%';
 
-    // 靜音偵測
+    // 聲音偵測
     if (avg > SILENCE_THRESHOLD) {
+      if (!hasVoice) {
+        hasVoice = true;
+        voiceStartTime = Date.now();
+      }
       resetSilenceTimer();
     }
   }, 100);
