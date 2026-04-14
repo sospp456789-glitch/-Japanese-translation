@@ -51,20 +51,19 @@
     scroll-behavior: smooth;
   }
 
-  /* Message bubbles - LINE style */
+  /* Message bubbles */
   .msg-row { display: flex; gap: 8px; animation: fadeIn 0.3s ease; }
   .msg-row.right { justify-content: flex-end; }
   .msg-row.left { justify-content: flex-start; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
   .bubble {
-    max-width: 80%;
+    max-width: 85%;
     border-radius: 18px;
     padding: 12px 16px;
-    position: relative;
   }
 
-  /* 右邊 = 你 (中文 → 日文翻譯) */
+  /* 右邊 = 我（中文 → 日文） */
   .msg-row.right .bubble {
     background: #06C755;
     border-bottom-right-radius: 4px;
@@ -77,13 +76,13 @@
     border-bottom: 1px solid rgba(255,255,255,0.2);
   }
   .msg-row.right .translated {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
     color: #fff;
     line-height: 1.4;
   }
 
-  /* 左邊 = 對方 (日文 → 中文翻譯) */
+  /* 左邊 = 對方（日文 → 中文） */
   .msg-row.left .bubble {
     background: #2a2a3e;
     border-bottom-left-radius: 4px;
@@ -96,37 +95,38 @@
     border-bottom: 1px solid rgba(255,255,255,0.1);
   }
   .msg-row.left .translated {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
     color: #E8344E;
     line-height: 1.4;
   }
 
-  /* 正在聽... 泡泡 */
-  .listening-bubble {
-    max-width: 80%;
-    border-radius: 18px;
-    padding: 12px 16px;
-    background: rgba(255,255,255,0.08);
-    border: 1px dashed rgba(255,255,255,0.2);
+  /* Processing bubble */
+  .processing {
     display: none;
+    padding: 0 16px 4px;
   }
-  .listening-bubble.active { display: block; }
-  .listening-bubble .interim {
-    font-size: 18px;
-    color: #aaa;
-    min-height: 24px;
+  .processing.active { display: block; }
+  .processing-inner {
+    background: rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
-  .listening-bubble .cursor {
-    display: inline-block;
-    width: 2px;
-    height: 20px;
-    background: #06C755;
-    animation: blink 0.7s infinite;
-    vertical-align: text-bottom;
-    margin-left: 2px;
+  .dot-loader { display: flex; gap: 4px; }
+  .dot-loader span {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #888;
+    animation: dotPulse 1s infinite;
   }
-  @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+  .dot-loader span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-loader span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotPulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
 
   /* Mic bar */
   .mic-bar {
@@ -140,13 +140,13 @@
     background: rgba(15,15,26,0.95);
   }
   .mic-btn {
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
     border: none;
     background: linear-gradient(135deg, #06C755, #04a648);
     cursor: pointer;
-    font-size: 28px;
+    font-size: 32px;
     transition: all 0.2s;
     display: flex;
     align-items: center;
@@ -154,7 +154,7 @@
     -webkit-tap-highlight-color: transparent;
   }
   .mic-btn:active { transform: scale(0.95); }
-  .mic-btn.listening {
+  .mic-btn.recording {
     background: linear-gradient(135deg, #E8344E, #c42a40);
     box-shadow: 0 0 0 8px rgba(232,52,78,0.2), 0 0 0 16px rgba(232,52,78,0.1);
     animation: mic-pulse 1.5s infinite;
@@ -170,6 +170,24 @@
   }
   .mic-label.active { color: #E8344E; }
 
+  /* Volume meter */
+  .volume-bar {
+    width: 120px;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    display: none;
+  }
+  .volume-bar.active { display: block; }
+  .volume-fill {
+    height: 100%;
+    background: #E8344E;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s;
+  }
+
   /* Hint */
   .hint {
     text-align: center;
@@ -179,16 +197,6 @@
     line-height: 2;
   }
   .hint .icon { font-size: 48px; margin-bottom: 12px; }
-
-  /* Not supported */
-  .not-supported {
-    text-align: center;
-    padding: 40px 20px;
-    color: #E8344E;
-    font-size: 16px;
-    line-height: 1.8;
-    display: none;
-  }
 </style>
 </head>
 <body>
@@ -203,24 +211,24 @@
   <div class="hint" id="hint">
     <div class="icon">🎤</div>
     按下麥克風開始對話<br>
-    說中文或日文都可以，自動偵測翻譯<br><br>
-    🟢 你說的 → 右邊（翻日文）<br>
-    🔴 對方說的 → 左邊（翻中文）
-  </div>
-  <div class="not-supported" id="notSupported">
-    ⚠️ 你的瀏覽器不支援語音辨識<br><br>
-    請用 <b>Chrome</b> 瀏覽器開啟此頁面
+    說中文或日文都可以，自動偵測<br><br>
+    🟢 你說的中文 → 右邊（翻日文）<br>
+    🔴 對方說的日文 → 左邊（翻中文）<br><br>
+    說完一句話稍微停頓，翻譯就會出現
   </div>
 </div>
 
-<!-- 正在聽的暫時泡泡 -->
-<div style="padding: 0 16px 8px; display: none;" id="interimRow">
-  <div class="listening-bubble active">
-    <div class="interim" id="interimText"><span class="cursor"></span></div>
+<div class="processing" id="processing">
+  <div class="processing-inner">
+    <div class="dot-loader"><span></span><span></span><span></span></div>
+    <span id="processingText">辨識翻譯中...</span>
   </div>
 </div>
 
 <div class="mic-bar">
+  <div class="volume-bar" id="volumeBar">
+    <div class="volume-fill" id="volumeFill"></div>
+  </div>
   <button class="mic-btn" id="micBtn">🎤</button>
   <div class="mic-label" id="micLabel">按下開始對話</div>
 </div>
@@ -231,54 +239,66 @@ const micBtn = document.getElementById('micBtn');
 const micLabel = document.getElementById('micLabel');
 const liveBadge = document.getElementById('liveBadge');
 const hint = document.getElementById('hint');
-const interimRow = document.getElementById('interimRow');
-const interimText = document.getElementById('interimText');
-const notSupported = document.getElementById('notSupported');
+const processing = document.getElementById('processing');
+const processingText = document.getElementById('processingText');
+const volumeBar = document.getElementById('volumeBar');
+const volumeFill = document.getElementById('volumeFill');
 
-let isListening = false;
-let recognition = null;
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let audioContext = null;
+let analyser = null;
+let silenceTimer = null;
+let volumeInterval = null;
+let stream = null;
 
-// 檢查瀏覽器支援
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SpeechRecognition) {
-  hint.style.display = 'none';
-  notSupported.style.display = 'block';
-  micBtn.disabled = true;
-  micBtn.style.opacity = 0.3;
-}
+// 偵測靜音的參數
+const SILENCE_THRESHOLD = 15;   // 音量低於此值 = 靜音
+const SILENCE_DURATION = 1500;  // 靜音超過 1.5 秒就送出
 
-// 偵測語言（有假名 = 日文）
-function detectLang(text) {
-  return /[\u3040-\u309F\u30A0-\u30FF]/.test(text) ? 'ja' : 'zh-TW';
-}
+// 呼叫語音辨識 + 翻譯 API
+async function recognizeAndTranslate(audioBlob) {
+  processing.classList.add('active');
+  processingText.textContent = '辨識翻譯中...';
 
-// 呼叫翻譯 API
-async function translateText(text) {
   try {
-    const res = await fetch('/api/translate', {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+
+    const res = await fetch('/api/voice-translate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: formData
     });
-    return await res.json();
+
+    const data = await res.json();
+    if (data.error) {
+      console.error('API error:', data.error);
+      return;
+    }
+
+    if (data.original && data.translated) {
+      addBubble(data.original, data.translated, data.source_lang);
+    }
   } catch (e) {
-    console.error('Translation error:', e);
-    return null;
+    console.error('Request error:', e);
+  } finally {
+    processing.classList.remove('active');
   }
 }
 
 // 新增對話泡泡
-function addBubble(original, translated, lang) {
+function addBubble(original, translated, sourceLang) {
   hint.style.display = 'none';
 
-  const isMyMessage = lang === 'zh-TW'; // 我說中文 → 右邊
+  const isChinese = sourceLang && sourceLang.startsWith('zh');
   const row = document.createElement('div');
-  row.className = `msg-row ${isMyMessage ? 'right' : 'left'}`;
+  row.className = `msg-row ${isChinese ? 'right' : 'left'}`;
 
   row.innerHTML = `
     <div class="bubble">
-      <div class="original">${original}</div>
-      <div class="translated">${translated}</div>
+      <div class="original">${escapeHtml(original)}</div>
+      <div class="translated">${escapeHtml(translated)}</div>
     </div>
   `;
 
@@ -286,109 +306,145 @@ function addBubble(original, translated, lang) {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-// 開始 / 停止聽
-function toggleListening() {
-  if (isListening) {
-    stopListening();
-  } else {
-    startListening();
-  }
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
 }
 
-function startListening() {
-  if (!SpeechRecognition) return;
-
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  // 同時聽中文和日文
-  recognition.lang = 'ja-JP'; // 日文模式也能辨識中文
-
-  recognition.onstart = () => {
-    isListening = true;
-    micBtn.classList.add('listening');
-    micBtn.textContent = '⏹';
-    micLabel.textContent = '正在聆聽... 說中文或日文';
-    micLabel.classList.add('active');
-    liveBadge.classList.add('active');
-    interimRow.style.display = 'block';
-  };
-
-  recognition.onresult = async (event) => {
-    let interim = '';
-    let final = '';
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        final += transcript;
-      } else {
-        interim += transcript;
-      }
-    }
-
-    // 顯示即時辨識文字
-    if (interim) {
-      interimText.innerHTML = interim + '<span class="cursor"></span>';
-      interimRow.style.display = 'block';
-    }
-
-    // 一句話講完了，送去翻譯
-    if (final) {
-      interimText.innerHTML = '<span class="cursor"></span>';
-
-      const lang = detectLang(final);
-      const result = await translateText(final);
-
-      if (result && result.translated) {
-        addBubble(final, result.translated, lang);
-      } else {
-        addBubble(final, '(翻譯失敗，請再說一次)', lang);
-      }
-    }
-  };
-
-  recognition.onerror = (event) => {
-    console.error('Speech error:', event.error);
-    if (event.error === 'not-allowed') {
-      micLabel.textContent = '請允許麥克風權限';
-    }
-  };
-
-  recognition.onend = () => {
-    // 如果還在聽的狀態，自動重新啟動（持續聆聽）
-    if (isListening) {
-      try {
-        recognition.start();
-      } catch (e) {
-        stopListening();
-      }
-    }
-  };
-
+// 開始錄音
+async function startRecording() {
   try {
-    recognition.start();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
-    console.error('Start error:', e);
+    micLabel.textContent = '請允許麥克風權限';
+    return;
   }
+
+  isRecording = true;
+  micBtn.classList.add('recording');
+  micBtn.textContent = '⏹';
+  micLabel.textContent = '正在聆聽... 說完會自動翻譯';
+  micLabel.classList.add('active');
+  liveBadge.classList.add('active');
+  volumeBar.classList.add('active');
+
+  // 音量分析（用來偵測靜音）
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioContext.createMediaStreamSource(stream);
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 512;
+  source.connect(analyser);
+
+  startNewRecording();
+  startVolumeMonitor();
 }
 
-function stopListening() {
-  isListening = false;
-  if (recognition) {
-    recognition.abort();
-    recognition = null;
+function startNewRecording() {
+  audioChunks = [];
+
+  mediaRecorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) {
+      audioChunks.push(e.data);
+    }
+  };
+
+  mediaRecorder.onstop = () => {
+    if (audioChunks.length > 0) {
+      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+      // 只有超過 0.5 秒的音檔才送出（避免雜音）
+      if (blob.size > 5000) {
+        recognizeAndTranslate(blob);
+      }
+    }
+    // 如果還在錄音狀態，開始錄下一段
+    if (isRecording && stream && stream.active) {
+      startNewRecording();
+    }
+  };
+
+  mediaRecorder.start();
+  resetSilenceTimer();
+}
+
+function getSupportedMimeType() {
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4'];
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
   }
-  micBtn.classList.remove('listening');
+  return 'audio/webm';
+}
+
+// 音量監測 + 靜音偵測
+function startVolumeMonitor() {
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  volumeInterval = setInterval(() => {
+    if (!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+
+    // 計算平均音量
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+    const avg = sum / dataArray.length;
+
+    // 更新音量條
+    const pct = Math.min(avg / 60 * 100, 100);
+    volumeFill.style.width = pct + '%';
+
+    // 靜音偵測
+    if (avg > SILENCE_THRESHOLD) {
+      resetSilenceTimer();
+    }
+  }, 100);
+}
+
+function resetSilenceTimer() {
+  clearTimeout(silenceTimer);
+  silenceTimer = setTimeout(() => {
+    // 靜音超時 → 送出當前這段
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop(); // 觸發 onstop → 送出 → 開始新錄音
+    }
+  }, SILENCE_DURATION);
+}
+
+// 停止錄音
+function stopRecording() {
+  isRecording = false;
+  clearTimeout(silenceTimer);
+  clearInterval(volumeInterval);
+
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  }
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+
+  micBtn.classList.remove('recording');
   micBtn.textContent = '🎤';
   micLabel.textContent = '按下開始對話';
   micLabel.classList.remove('active');
   liveBadge.classList.remove('active');
-  interimRow.style.display = 'none';
-  interimText.innerHTML = '<span class="cursor"></span>';
+  volumeBar.classList.remove('active');
+  volumeFill.style.width = '0%';
 }
 
-micBtn.addEventListener('click', toggleListening);
+micBtn.addEventListener('click', () => {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
 </script>
 
 </body>

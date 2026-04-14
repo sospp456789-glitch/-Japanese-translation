@@ -174,7 +174,7 @@ def live_translate():
 
 @app.route("/api/translate", methods=["POST"])
 def api_translate():
-    """即時翻譯 API — 供網頁版使用。"""
+    """文字翻譯 API — 供網頁版使用。"""
     try:
         data = request.get_json()
         text = data.get("text", "").strip()
@@ -192,6 +192,55 @@ def api_translate():
     except Exception as e:
         print(f"API translate error: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/voice-translate", methods=["POST"])
+def api_voice_translate():
+    """語音辨識 + 翻譯 API — 接收音檔，回傳辨識文字與翻譯。"""
+    audio_path = None
+    try:
+        if 'audio' not in request.files:
+            return jsonify({"error": "no audio file"}), 400
+
+        audio_file = request.files['audio']
+        audio_path = os.path.join(TEMP_AUDIO_DIR, f"live_{int(time.time()*1000)}.webm")
+        audio_file.save(audio_path)
+
+        # Groq Whisper 辨識（自動偵測語言）
+        stt_result = speech_to_text(audio_path)
+        recognized_text = stt_result["text"].strip()
+        record("stt")
+
+        if not recognized_text:
+            return jsonify({"error": "empty recognition"})
+
+        # 用文字內容判斷語言
+        text_lang = detect_language(recognized_text)
+        if text_lang == "ja":
+            source, target = "ja", "zh-TW"
+        else:
+            source, target = "zh-TW", "ja"
+
+        result = translate(recognized_text, source=source, target=target)
+        record("translate")
+
+        return jsonify({
+            "original": result["original"],
+            "translated": result["translated"],
+            "source_lang": source,
+            "target_lang": target,
+        })
+
+    except Exception as e:
+        print(f"API voice-translate error: {traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        if audio_path and os.path.exists(audio_path):
+            try:
+                os.remove(audio_path)
+            except Exception:
+                pass
 
 
 # ── LINE Webhook ──────────────────────────────────────────────
