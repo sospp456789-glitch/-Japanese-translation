@@ -22,6 +22,7 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import (
     MessageEvent,
+    FollowEvent,
     TextMessageContent,
     AudioMessageContent,
     ImageMessageContent,
@@ -53,9 +54,44 @@ QUICK_PHRASES = [
 ]
 
 # 系統指令
-SYSTEM_COMMANDS = {"用量", "用量統計", "usage", "📊"}
+USAGE_COMMANDS = {"用量", "用量統計", "usage", "📊"}
+HELP_COMMANDS = {"/help", "help", "幫助", "功能", "說明"}
 
 PHRASE_MAP = {label: phrase for label, phrase in QUICK_PHRASES}
+
+
+WELCOME_MESSAGE = """🎌 歡迎你加入胖虎的 AI 翻譯助手（日本專用）
+
+你的隨身中日翻譯工具，旅途中隨時可用！
+
+📖 輸入 /help 查看完整功能說明"""
+
+HELP_MESSAGE = """📖 胖虎的 AI 翻譯助手 — 功能說明
+
+【💬 文字翻譯】
+直接打中文或日文，自動偵測語言並翻譯
+翻譯結果以大字卡顯示，方便亮給對方看
+
+【🎤 語音翻譯】
+長按麥克風錄音，說中文或日文
+Bot 自動辨識語音 → 翻譯 → 回傳文字+語音
+語音可以直接播給日本人聽
+
+【📷 圖片翻譯】
+拍菜單、路標、指示牌傳給 Bot
+自動辨識圖片中的文字並翻譯
+
+【⚡ 常用句快速翻譯】
+每次翻譯後底部會出現快捷按鈕：
+🙏 謝謝 ｜ 💰 多少錢 ｜ 📍 在哪裡
+🚻 廁所 ｜ 🍽 推薦餐點 ｜ 🏨 飯店方向
+🚃 車站 ｜ 🆘 求助
+一按就翻，自動用禮貌日文表達
+
+【📊 用量查詢】
+輸入「用量」查看今日與近 7 天使用統計
+
+祝你日本旅途愉快！🗾✈️"""
 
 
 def build_quick_reply():
@@ -151,6 +187,14 @@ def serve_audio(filename):
     return send_file(filepath, mimetype="audio/mpeg")
 
 
+# ── 歡迎新好友 ───────────────────────────────────────────────
+@line_handler.add(FollowEvent)
+def handle_follow(event):
+    msg = TextMessage(text=WELCOME_MESSAGE)
+    msg.quick_reply = build_quick_reply()
+    reply(event, [msg])
+
+
 # ── 處理文字訊息 ─────────────────────────────────────────────
 @line_handler.add(MessageEvent, message=TextMessageContent)
 def handle_text(event):
@@ -158,8 +202,15 @@ def handle_text(event):
     if not user_text:
         return
 
+    # 系統指令：/help
+    if user_text.lower() in HELP_COMMANDS:
+        msg = TextMessage(text=HELP_MESSAGE)
+        msg.quick_reply = build_quick_reply()
+        reply(event, [msg])
+        return
+
     # 系統指令：用量查詢
-    if user_text in SYSTEM_COMMANDS:
+    if user_text in USAGE_COMMANDS:
         summary = get_today_summary() + "\n\n" + get_weekly_summary()
         reply(event, [TextMessage(text=summary)])
         return
